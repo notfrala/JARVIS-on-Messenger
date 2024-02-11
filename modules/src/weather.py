@@ -24,12 +24,38 @@ def process(input, entities):
         output['input'] = input
         temperature_in_fahrenheit = weather_data['main']['temp'] * 1.8 + 32
         degree_sign = u'\N{DEGREE SIGN}'
+        headers = {"accept": "application/json"}
+        r = requests.get('https://api.openaq.org/v2/measurements?limit=1&page=1&offset=0&sort=desc&unit=µg/m³&coordinates=' + str(
+            location_data['results'][0]['geometry']['location']['lat']) + ',' + str(
+            location_data['results'][0]['geometry']['location']['lng']) + '&radius=5000&order_by=datetime&sensorType=reference%20grade', headers=headers)
+        aq_data = r.json()
+        ppc = response['results'][0]['value']
+        
+        # EPA air quality index translation 
+        # Based on Particle Pollution Concentration (µg/m3)
+        qualities = {
+            'Good': (0.0,12.0),
+            'Moderate': (12.1,35.4),
+            'Unhealthy for Sensitive Groups': (35.5,55.4),
+            'Unhealthy': (55.5, 150.4),
+            'Very Unhealthy': (150.5, 250.4)
+        }
+        
+        for diag,vals in qualities.items():
+            if ppc >= vals[0] and ppc <= vals[1]:
+                quality = diag
+                break
+        else:
+            quality = 'Error'
+        
+        aq = quality + ' ' + str(ppc) + ' ' + str(response['results'][0]['unit'])  
+        
         output['output'] = TextTemplate(
             'Location: ' + location_data['results'][0]['formatted_address'] + '\nWeather: ' +
             weather_data['weather'][0][
                 'description'] + '\nTemperature: ' + str(
                 weather_data['main']['temp']) + ' ' + degree_sign + 'C / ' + str(
-                temperature_in_fahrenheit) + ' ' + degree_sign + 'F\n- Info provided by OpenWeatherMap').get_message()
+                temperature_in_fahrenheit) + ' ' + degree_sign + '\nAir Quality: ' + aq + 'F\n- Info provided by OpenWeatherMap').get_message()
         output['success'] = True
     except:
         error_message = 'I couldn\'t get the weather info you asked for.'
